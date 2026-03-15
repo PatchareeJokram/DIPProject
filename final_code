@@ -9,7 +9,7 @@ og_receipt = cv2.imread('poundland_tophalf.JPG', cv2.IMREAD_GRAYSCALE)
 #cv2.destroyAllWindows()
 
 #แยกใบเสร็จออกจากพื้นหลังอัตโนมัติ
-_, mask = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+_, mask = cv2.threshold(og_receipt, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 # cv2.imshow('Otsu', mask )
 # cv2.waitKey(0)
 # cv2.destroyAllWindows() 
@@ -27,9 +27,9 @@ contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 largest = max(contours, key=cv2.contourArea)
 
 #สร้าง Mask ทึบเฉพาะบริเวณใบเสร็จและนำไปซ้อนกับภาพเดิมเพื่อตัดส่วนเกินรอบนอกออก
-final_mask = np.zeros_like(img)
+final_mask = np.zeros_like(og_receipt)
 cv2.drawContours(final_mask, [largest], -1, 255, -1)
-masked = cv2.bitwise_and(img, img, mask=final_mask)
+masked = cv2.bitwise_and(og_receipt, og_receipt, mask=final_mask)
 # cv2.imshow("final_mask", final_mask)
 # cv2.imshow("Result", result)
 # cv2.waitKey(0)
@@ -67,10 +67,16 @@ sharp = pywt.waverec2(new_coeffs, 'db4')
 sharp = np.clip(sharp, 0, 1)
 sharp = (sharp * 255).astype(np.uint8)
 warped = sharp
+# cv2.imshow("wavelet", warped)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
 
 #ลด noise เล็กๆ ด้วย Gaussian Blur บางๆ
 blurred = cv2.GaussianBlur(warped, (3, 3), 0)
 #CLAHE เพิ่มความคมชัดของตัวอักษรด้วย (Contrast Limited Adaptive Histogram Equalization)
 clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
 cl = clahe.apply(blurred)
+# cv2.imshow("cl", cl)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
 
