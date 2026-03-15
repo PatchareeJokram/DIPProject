@@ -1,0 +1,76 @@
+import cv2
+import mahotas
+import numpy as np
+import pywt
+
+og_receipt = cv2.imread('poundland_tophalf.JPG', cv2.IMREAD_GRAYSCALE)
+#cv2.imshow('og_receipt', og_receipt)
+#cv2.waitKey(0)
+#cv2.destroyAllWindows()
+
+#แยกใบเสร็จออกจากพื้นหลังอัตโนมัติ
+_, mask = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+# cv2.imshow('Otsu', mask )
+# cv2.waitKey(0)
+# cv2.destroyAllWindows() 
+
+#ใช้ Morphological Closing เพื่อเชื่อมจุดที่ขาดหายหรือรอยพับบนใบเสร็จให้สมบูรณ์ขึ้น
+kernel = np.ones((5, 5), np.uint8)
+for _ in range(3):
+    mask = mahotas.close(mask, kernel)
+# cv2.imshow('Morphological Close', mask2 )
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
+
+#หา Contour ใหญ่สุด = ใบเสร็จ
+contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+largest = max(contours, key=cv2.contourArea)
+
+#สร้าง Mask ทึบเฉพาะบริเวณใบเสร็จและนำไปซ้อนกับภาพเดิมเพื่อตัดส่วนเกินรอบนอกออก
+final_mask = np.zeros_like(img)
+cv2.drawContours(final_mask, [largest], -1, 255, -1)
+masked = cv2.bitwise_and(img, img, mask=final_mask)
+# cv2.imshow("final_mask", final_mask)
+# cv2.imshow("Result", result)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
+
+#Crop ให้เหลือเฉพาะขอบเขตของใบเสร็จ
+x, y, w, h = cv2.boundingRect(largest)
+cropped = masked[y:y + h, x:x + w]
+# cv2.imshow("Result", cropped)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
+
+#ทำ Background Division เพื่อกำจัดแสงเงาที่ไม่สม่ำเสมอและปัญหาข้อความทะลุหลัง
+#ทำ Gaussian Blur ขนาดใหญ่เพื่อประมาณค่าความสว่างของพื้นหลัง
+bg = cv2.GaussianBlur(cropped.astype(np.float32), (91, 91), 0)
+
+#นำภาพมาหารด้วยพื้นหลังเพื่อปรับค่าความสว่างให้สม่ำเสมอทั่วทั้งภาพ
+divided = cropped.astype(np.float32) / (bg + 1e-6)
+#ปรับค่าสีให้อยู่ใน 0-255
+divided = cv2.normalize(divided, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+
+#Wavelet Sharpen เพิ่มความคมชัดขอบตัวอักษร
+img_float = divided.astype(np.float32) / 255.0
+#Wavelet decomposition
+coeffs = pywt.wavedec2(img_float, wavelet='db4', level=3)
+new_coeffs = [coeffs[0]]
+for detail in coeffs[1:]:
+    cH, cV, cD = detail
+    cH = cH * 1.5
+    cV = cV * 1.5
+    cD = cD * 1.2  # diagonal เพิ่มน้อยกว่าเพื่อลด noise
+    new_coeffs.append((cH, cV, cD))
+
+sharp = pywt.waverec2(new_coeffs, 'db4')
+sharp = np.clip(sharp, 0, 1)
+sharp = (sharp * 255).astype(np.uint8)
+warped = sharp
+
+#ลด noise เล็กๆ ด้วย Gaussian Blur บางๆ
+blurred = cv2.GaussianBlur(warped, (3, 3), 0)
+#CLAHE เพิ่มความคมชัดของตัวอักษรด้วย (Contrast Limited Adaptive Histogram Equalization)
+clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+cl = clahe.apply(blurred)
+
