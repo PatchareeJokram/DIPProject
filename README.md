@@ -34,7 +34,7 @@ Receipt images often suffer from poor lighting conditions, shadows, wrinkles, an
 - Reduced background noise and shadow effects
 - Enhanced character edges for better OCR readiness
 
-## Tools
+## Tech Stack
 - Python
 - OpenCV
 - NumPy
